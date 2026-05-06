@@ -1,16 +1,22 @@
-# UK Horse Racing Predictor - Stage 6
+# UK Horse Racing Predictor - Stage 7 Daily Import
 
-Stage 6 adds persistent database support.
+Stage 7 adds a daily one-button import workflow.
 
-## New in Stage 6
+## What it can do
 
-- SQLite fallback still works
-- Supabase/PostgreSQL support
-- Database connection helper
-- SQL setup script
-- Streamlit secrets support
-- Data no longer needs to reset if connected to Supabase
-- Keeps daily workflow, data quality, odds movement, staking, settlement and exports
+- Save source URLs for racecards, odds and results
+- Press one button to fetch today’s source pages
+- Extract HTML tables from those pages
+- Auto-map common racing columns
+- Review/edit before import
+- Import racecards, odds and results into SQLite
+- Keep previous scoring, picks, odds movement and exports
+
+## Important
+
+This does not bypass blocked sites, paywalls or Cloudflare.
+
+If a site does not provide normal HTML tables, use the paste cleaner or a proper API.
 
 ## Streamlit Cloud
 
@@ -20,26 +26,12 @@ Main file path:
 app.py
 ```
 
-## Quick start without Supabase
+## Best daily workflow
 
-The app still works locally/Streamlit with SQLite if you do nothing.
-
-## Supabase setup
-
-1. Create a Supabase project.
-2. Go to Project Settings > Database.
-3. Copy your connection string.
-4. In Streamlit Cloud, go to App > Settings > Secrets.
-5. Add:
-
-```toml
-DATABASE_URL = "postgresql://postgres.xxxxxx:YOUR_PASSWORD@aws-0-eu-west-2.pooler.supabase.com:6543/postgres"
-```
-
-6. Reboot the app.
-7. Open the app.
-8. Go to Dashboard and check database mode.
-
-## Important
-
-Use the pooler connection string from Supabase if available.
+1. Go to **Source Manager**.
+2. Add public URLs that contain racecard/odds/results tables.
+3. Use `{date}` inside URLs where needed.
+4. Go to **Daily Auto Import**.
+5. Press **Fetch Today’s Sources**.
+6. Review extracted tables.
+7. Import the correct table.

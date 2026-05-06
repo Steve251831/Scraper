@@ -1,5 +1,6 @@
 streamlit
 pandas
 numpy
-sqlalchemy
-psycopg2-binary
+requests
+beautifulsoup4
+lxml
