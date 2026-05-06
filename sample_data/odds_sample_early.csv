@@ -1,13 +1,5 @@
 race_date,course,race_time,horse,bookmaker,decimal_odds,exchange_back,exchange_lay,traded_volume,odds_time,source
 2026-05-06,Kempton,18:00,Example Horse A,SampleBook,3.2,3.3,3.4,3000,09:00,sample_early
 2026-05-06,Kempton,18:00,Example Horse B,SampleBook,5.0,5.2,5.4,1800,09:00,sample_early
-2026-05-06,Kempton,18:00,Example Horse E,SampleBook,8.5,8.8,9.0,900,09:00,sample_early
-2026-05-06,Kempton,18:00,Example Horse F,SampleBook,4.8,5.0,5.2,1300,09:00,sample_early
 2026-05-06,Chester,14:30,Example Horse C,SampleBook,4.2,4.3,4.4,4200,09:00,sample_early
-2026-05-06,Chester,14:30,Example Horse D,SampleBook,7.0,7.2,7.4,1200,09:00,sample_early
-2026-05-06,Chester,14:30,Example Horse G,SampleBook,6.5,6.8,7.0,1600,09:00,sample_early
-2026-05-06,Chester,14:30,Example Horse H,SampleBook,11.0,11.5,12.0,500,09:00,sample_early
 2026-05-06,Ascot,15:10,Example Horse I,SampleBook,2.8,2.9,3.0,6000,09:00,sample_early
-2026-05-06,Ascot,15:10,Example Horse J,SampleBook,7.0,7.2,7.4,1100,09:00,sample_early
-2026-05-06,Ascot,15:10,Example Horse K,SampleBook,5.5,5.8,6.0,1800,09:00,sample_early
-2026-05-06,Ascot,15:10,Example Horse L,SampleBook,13.0,13.5,14.0,300,09:00,sample_early

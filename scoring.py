@@ -3,15 +3,8 @@ import pandas as pd
 import numpy as np
 
 DEFAULT_WEIGHTS = {
-    "form": 20,
-    "rating": 15,
-    "cd": 15,
-    "course": 7,
-    "distance": 8,
-    "freshness": 10,
-    "draw": 5,
-    "market": 10,
-    "movement": 3,
+    "form": 20, "rating": 15, "cd": 15, "course": 7, "distance": 8,
+    "freshness": 10, "draw": 5, "market": 10, "movement": 3,
 }
 
 def parse_form_score(form):
@@ -22,16 +15,11 @@ def parse_form_score(form):
         return 0.0
     score = 0
     for c in chars:
-        if c == "1":
-            score += 10
-        elif c == "2":
-            score += 8
-        elif c == "3":
-            score += 6
-        elif c == "4":
-            score += 4
-        elif c.isdigit():
-            score += max(1, 6 - int(c))
+        if c == "1": score += 10
+        elif c == "2": score += 8
+        elif c == "3": score += 6
+        elif c == "4": score += 4
+        elif c.isdigit(): score += max(1, 6 - int(c))
     return round(score / len(chars), 2)
 
 def normalise(series):
@@ -43,8 +31,7 @@ def normalise(series):
 def implied_probability(decimal_odds):
     try:
         odds = float(decimal_odds)
-        if odds <= 1:
-            return np.nan
+        if odds <= 1: return np.nan
         return 1 / odds
     except Exception:
         return np.nan
@@ -52,53 +39,40 @@ def implied_probability(decimal_odds):
 def score_runners(df, weights=None):
     if df.empty:
         return df
-
     weights = weights or DEFAULT_WEIGHTS
     data = df.copy()
-
-    for col in [
-        "official_rating", "course_winner", "distance_winner", "cd_winner",
-        "days_since_run", "draw", "decimal_odds", "exchange_back",
-        "opening_odds", "latest_odds", "odds_change_pct", "traded_volume"
-    ]:
+    for col in ["official_rating","course_winner","distance_winner","cd_winner","days_since_run","draw","decimal_odds","exchange_back","opening_odds","latest_odds","odds_change_pct","traded_volume"]:
         if col not in data.columns:
             data[col] = np.nan
 
     data["best_odds"] = data["exchange_back"].fillna(data["decimal_odds"]).fillna(data["latest_odds"])
     data["implied_probability"] = data["best_odds"].apply(implied_probability)
-
     data["form_score"] = data["form"].apply(parse_form_score) / 10
     data["rating_score"] = normalise(data["official_rating"])
     data["cd_score"] = np.where(pd.to_numeric(data["cd_winner"], errors="coerce").fillna(0) == 1, 1, 0)
     data["course_score"] = np.where(pd.to_numeric(data["course_winner"], errors="coerce").fillna(0) == 1, 1, 0)
     data["distance_score"] = np.where(pd.to_numeric(data["distance_winner"], errors="coerce").fillna(0) == 1, 1, 0)
-
     days = pd.to_numeric(data["days_since_run"], errors="coerce")
-    data["freshness_score"] = np.where(days.between(10, 60), 1, np.where(days.between(61, 120), 0.5, 0))
-
+    data["freshness_score"] = np.where(days.between(10,60), 1, np.where(days.between(61,120), 0.5, 0))
     draw = pd.to_numeric(data["draw"], errors="coerce")
     runners = pd.to_numeric(data["runners_count"], errors="coerce")
     data["draw_score"] = np.where(draw.notna() & runners.notna(), 1 - ((draw - 1) / runners).clip(0, 1), 0.5)
-
     data["market_score"] = data["implied_probability"].fillna(0)
     if data["market_score"].max() > 0:
         data["market_score"] = normalise(data["market_score"])
-
     change = pd.to_numeric(data["odds_change_pct"], errors="coerce").fillna(0)
     data["movement_score"] = np.where(change <= -10, 1, np.where(change >= 15, -1, 0))
-
     data["raw_score"] = (
-        data["form_score"] * weights.get("form", 20) +
-        data["rating_score"] * weights.get("rating", 15) +
-        data["cd_score"] * weights.get("cd", 15) +
-        data["course_score"] * weights.get("course", 7) +
-        data["distance_score"] * weights.get("distance", 8) +
-        data["freshness_score"] * weights.get("freshness", 10) +
-        data["draw_score"] * weights.get("draw", 5) +
-        data["market_score"] * weights.get("market", 10) +
-        data["movement_score"] * weights.get("movement", 3)
+        data["form_score"] * weights.get("form",20) +
+        data["rating_score"] * weights.get("rating",15) +
+        data["cd_score"] * weights.get("cd",15) +
+        data["course_score"] * weights.get("course",7) +
+        data["distance_score"] * weights.get("distance",8) +
+        data["freshness_score"] * weights.get("freshness",10) +
+        data["draw_score"] * weights.get("draw",5) +
+        data["market_score"] * weights.get("market",10) +
+        data["movement_score"] * weights.get("movement",3)
     )
-
     data["score_positive"] = data["raw_score"].clip(lower=0.01)
     race_total = data.groupby("race_id")["score_positive"].transform("sum")
     data["model_win_probability"] = (data["score_positive"] / race_total).round(4)

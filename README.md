@@ -1,20 +1,16 @@
-# UK Horse Racing Predictor - Stage 5
+# UK Horse Racing Predictor - Stage 6
 
-Stage 5 turns the app into a more usable daily system.
+Stage 6 adds persistent database support.
 
-## New in Stage 5
+## New in Stage 6
 
-- Daily setup checklist
-- Data quality checker
-- Missing odds/results checks
-- Duplicate runner checks
-- Odds snapshot workflow
-- Staking calculator
-- Bankroll page
-- Auto-settlement for selections
-- Win and each-way return calculations
-- Semi-automatic racecard collection helper
-- Keeps Stage 4 paste cleaner, manual entry, scoring controls, horse matcher and backtesting
+- SQLite fallback still works
+- Supabase/PostgreSQL support
+- Database connection helper
+- SQL setup script
+- Streamlit secrets support
+- Data no longer needs to reset if connected to Supabase
+- Keeps daily workflow, data quality, odds movement, staking, settlement and exports
 
 ## Streamlit Cloud
 
@@ -24,25 +20,26 @@ Main file path:
 app.py
 ```
 
-## Dependencies
+## Quick start without Supabase
 
-Only:
+The app still works locally/Streamlit with SQLite if you do nothing.
 
-```text
-streamlit
-pandas
-numpy
+## Supabase setup
+
+1. Create a Supabase project.
+2. Go to Project Settings > Database.
+3. Copy your connection string.
+4. In Streamlit Cloud, go to App > Settings > Secrets.
+5. Add:
+
+```toml
+DATABASE_URL = "postgresql://postgres.xxxxxx:YOUR_PASSWORD@aws-0-eu-west-2.pooler.supabase.com:6543/postgres"
 ```
 
-## Suggested daily workflow
+6. Reboot the app.
+7. Open the app.
+8. Go to Dashboard and check database mode.
 
-1. Add today's racecards using CSV, paste cleaner, or manual entry.
-2. Add early odds snapshot.
-3. Add later odds snapshot.
-4. Check data quality.
-5. Review daily picks.
-6. Log selections.
-7. Add results.
-8. Auto-match results.
-9. Auto-settle returns.
-10. Review bankroll/performance.
+## Important
+
+Use the pooler connection string from Supabase if available.
