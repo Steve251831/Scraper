@@ -23,11 +23,15 @@ def clean_row(row):
 def import_racecards(path):
     init_db()
     df = pd.read_csv(path)
+    return import_racecard_dataframe(df)
+
+def import_racecard_dataframe(df):
     required = {"race_date", "course", "race_time", "horse"}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"Missing required racecard CSV columns: {missing}")
 
+    rows_added = 0
     with connect() as con:
         for _, r in df.iterrows():
             row = clean_row(r.to_dict())
@@ -71,15 +75,21 @@ def import_racecards(path):
                 safe_int(row.get("days_since_run")), row.get("headgear"),
                 safe_int(row.get("non_runner")) or 0
             ))
+            rows_added += 1
+    return rows_added
 
 def import_odds(path):
     init_db()
     df = pd.read_csv(path)
+    return import_odds_dataframe(df)
+
+def import_odds_dataframe(df):
     required = {"race_date", "course", "race_time", "horse"}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"Missing required odds CSV columns: {missing}")
 
+    rows_added = 0
     with connect() as con:
         for _, r in df.iterrows():
             row = clean_row(r.to_dict())
@@ -94,15 +104,21 @@ def import_odds(path):
                 safe_float(row.get("exchange_back")), safe_float(row.get("exchange_lay")),
                 safe_float(row.get("traded_volume")), row.get("odds_time"), row.get("source")
             ))
+            rows_added += 1
+    return rows_added
 
 def import_results(path):
     init_db()
     df = pd.read_csv(path)
+    return import_results_dataframe(df)
+
+def import_results_dataframe(df):
     required = {"race_date", "course", "race_time", "horse", "finishing_position"}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"Missing required results CSV columns: {missing}")
 
+    rows_added = 0
     with connect() as con:
         for _, r in df.iterrows():
             row = clean_row(r.to_dict())
@@ -115,3 +131,9 @@ def import_results(path):
                 str(row["horse"]), str(row["finishing_position"]), safe_float(row.get("sp")),
                 row.get("result_status"), row.get("source")
             ))
+            rows_added += 1
+    return rows_added
+
+def manual_add_runner(row):
+    df = pd.DataFrame([row])
+    return import_racecard_dataframe(df)

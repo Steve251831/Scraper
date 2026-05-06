@@ -2,6 +2,18 @@ import re
 import pandas as pd
 import numpy as np
 
+DEFAULT_WEIGHTS = {
+    "form": 20,
+    "rating": 15,
+    "cd": 15,
+    "course": 7,
+    "distance": 8,
+    "freshness": 10,
+    "draw": 5,
+    "market": 10,
+    "movement": 3,
+}
+
 def parse_form_score(form):
     if not isinstance(form, str) or not form.strip():
         return 0.0
@@ -41,17 +53,7 @@ def score_runners(df, weights=None):
     if df.empty:
         return df
 
-    weights = weights or {
-        "form": 20,
-        "rating": 15,
-        "cd": 15,
-        "course": 7,
-        "distance": 8,
-        "freshness": 10,
-        "draw": 5,
-        "market": 10,
-    }
-
+    weights = weights or DEFAULT_WEIGHTS
     data = df.copy()
 
     for col in [
@@ -67,7 +69,6 @@ def score_runners(df, weights=None):
 
     data["form_score"] = data["form"].apply(parse_form_score) / 10
     data["rating_score"] = normalise(data["official_rating"])
-
     data["cd_score"] = np.where(pd.to_numeric(data["cd_winner"], errors="coerce").fillna(0) == 1, 1, 0)
     data["course_score"] = np.where(pd.to_numeric(data["course_winner"], errors="coerce").fillna(0) == 1, 1, 0)
     data["distance_score"] = np.where(pd.to_numeric(data["distance_winner"], errors="coerce").fillna(0) == 1, 1, 0)
@@ -83,43 +84,29 @@ def score_runners(df, weights=None):
     if data["market_score"].max() > 0:
         data["market_score"] = normalise(data["market_score"])
 
-    # Steamers get a small confidence lift, drifters get a small penalty.
     change = pd.to_numeric(data["odds_change_pct"], errors="coerce").fillna(0)
-    data["movement_adjustment"] = np.where(change <= -10, 3, np.where(change >= 15, -3, 0))
+    data["movement_score"] = np.where(change <= -10, 1, np.where(change >= 15, -1, 0))
 
     data["raw_score"] = (
-        data["form_score"] * weights["form"] +
-        data["rating_score"] * weights["rating"] +
-        data["cd_score"] * weights["cd"] +
-        data["course_score"] * weights["course"] +
-        data["distance_score"] * weights["distance"] +
-        data["freshness_score"] * weights["freshness"] +
-        data["draw_score"] * weights["draw"] +
-        data["market_score"] * weights["market"] +
-        data["movement_adjustment"]
+        data["form_score"] * weights.get("form", 20) +
+        data["rating_score"] * weights.get("rating", 15) +
+        data["cd_score"] * weights.get("cd", 15) +
+        data["course_score"] * weights.get("course", 7) +
+        data["distance_score"] * weights.get("distance", 8) +
+        data["freshness_score"] * weights.get("freshness", 10) +
+        data["draw_score"] * weights.get("draw", 5) +
+        data["market_score"] * weights.get("market", 10) +
+        data["movement_score"] * weights.get("movement", 3)
     )
 
     data["score_positive"] = data["raw_score"].clip(lower=0.01)
     race_total = data.groupby("race_id")["score_positive"].transform("sum")
     data["model_win_probability"] = (data["score_positive"] / race_total).round(4)
     data["model_place_probability"] = (data["model_win_probability"] * 2.35).clip(upper=0.90).round(4)
-
     data["value_score"] = (data["model_win_probability"] - data["implied_probability"].fillna(0)).round(4)
     data["confidence_score"] = (data["model_win_probability"] * 100).round(1)
-
-    data["risk_rating"] = np.where(
-        data["confidence_score"] >= 25, "Low",
-        np.where(data["confidence_score"] >= 14, "Medium", "High")
-    )
-
-    data["each_way_score"] = (
-        (data["model_place_probability"] * 100) +
-        (data["value_score"].clip(lower=0) * 100)
-    ).round(2)
-
-    data["bet_flag"] = np.where(
-        data["value_score"] > 0.02, "Value",
-        np.where(data["confidence_score"] >= 25, "Strong chance", "No Bet / Watch")
-    )
+    data["risk_rating"] = np.where(data["confidence_score"] >= 25, "Low", np.where(data["confidence_score"] >= 14, "Medium", "High"))
+    data["each_way_score"] = ((data["model_place_probability"] * 100) + (data["value_score"].clip(lower=0) * 100)).round(2)
+    data["bet_flag"] = np.where(data["value_score"] > 0.02, "Value", np.where(data["confidence_score"] >= 25, "Strong chance", "No Bet / Watch"))
 
     return data.sort_values(["race_id", "model_win_probability"], ascending=[True, False])

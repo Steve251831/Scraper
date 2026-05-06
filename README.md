@@ -1,17 +1,17 @@
-# UK Horse Racing Predictor - Stage 3
+# UK Horse Racing Predictor - Stage 4
 
-Streamlit-safe version with:
+Stage 4 adds practical data-entry tools so you can start using real racing data faster.
 
-- Racecard CSV import
-- Odds CSV import
-- Multiple odds snapshots
-- Steamer/drifter detection
-- Results CSV import
-- Auto-match results to logged selections
-- Bet-type performance stats
-- Database export page
-- NAP, each-way NAP, Win Yankee, Each-Way Yankee
-- Value singles and No Bet / Watch flags
+## New in Stage 4
+
+- Paste racecard table cleaner
+- Manual meeting/race/runner entry
+- Scoring weights page
+- Simple horse-name matching helper
+- Backtest page
+- Odds movement from Stage 3
+- Results auto-match from Stage 3
+- Database export
 
 ## Streamlit Cloud
 
@@ -20,20 +20,6 @@ Main file path:
 ```text
 app.py
 ```
-
-## First test
-
-1. Upload to GitHub.
-2. Reboot Streamlit app.
-3. Go to **Import Data**.
-4. Load sample racecards.
-5. Load sample early odds.
-6. Load sample later odds.
-7. Go to **Odds Movement**.
-8. Go to **Daily Picks** and select `2026-05-06`.
-9. Log a selection.
-10. Load sample results.
-11. Click **Auto-match results to selections** on Results Tracker.
 
 ## Dependencies
 
@@ -44,3 +30,14 @@ streamlit
 pandas
 numpy
 ```
+
+## Test
+
+1. Load sample racecards.
+2. Load sample early odds.
+3. Load sample later odds.
+4. Go to Daily Picks.
+5. Log selections.
+6. Load sample results.
+7. Auto-match results.
+8. Check Performance and Backtest.
