@@ -1,17 +1,20 @@
-# UK Horse Racing Predictor - Stage 4
+# UK Horse Racing Predictor - Stage 5
 
-Stage 4 adds practical data-entry tools so you can start using real racing data faster.
+Stage 5 turns the app into a more usable daily system.
 
-## New in Stage 4
+## New in Stage 5
 
-- Paste racecard table cleaner
-- Manual meeting/race/runner entry
-- Scoring weights page
-- Simple horse-name matching helper
-- Backtest page
-- Odds movement from Stage 3
-- Results auto-match from Stage 3
-- Database export
+- Daily setup checklist
+- Data quality checker
+- Missing odds/results checks
+- Duplicate runner checks
+- Odds snapshot workflow
+- Staking calculator
+- Bankroll page
+- Auto-settlement for selections
+- Win and each-way return calculations
+- Semi-automatic racecard collection helper
+- Keeps Stage 4 paste cleaner, manual entry, scoring controls, horse matcher and backtesting
 
 ## Streamlit Cloud
 
@@ -31,13 +34,15 @@ pandas
 numpy
 ```
 
-## Test
+## Suggested daily workflow
 
-1. Load sample racecards.
-2. Load sample early odds.
-3. Load sample later odds.
-4. Go to Daily Picks.
-5. Log selections.
-6. Load sample results.
-7. Auto-match results.
-8. Check Performance and Backtest.
+1. Add today's racecards using CSV, paste cleaner, or manual entry.
+2. Add early odds snapshot.
+3. Add later odds snapshot.
+4. Check data quality.
+5. Review daily picks.
+6. Log selections.
+7. Add results.
+8. Auto-match results.
+9. Auto-settle returns.
+10. Review bankroll/performance.

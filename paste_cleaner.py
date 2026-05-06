@@ -17,14 +17,12 @@ COLUMN_GUESSES = {
     "weight": ["weight", "wgt", "wt"],
     "official_rating": ["or", "official rating", "official_rating", "rating"],
     "form": ["form", "recent form"],
-    "odds": ["odds", "price"],
 }
 
 def parse_pasted_table(text, default_meta):
     if not text or not text.strip():
         return pd.DataFrame(columns=RACECARD_COLUMNS)
 
-    # Try tab-separated first, then comma, then whitespace.
     try:
         df = pd.read_csv(StringIO(text), sep="\t")
         if df.shape[1] <= 1:
@@ -38,7 +36,6 @@ def parse_pasted_table(text, default_meta):
 
     df.columns = [str(c).strip().lower() for c in df.columns]
     out = pd.DataFrame()
-
     for target in RACECARD_COLUMNS:
         out[target] = ""
 
@@ -48,7 +45,6 @@ def parse_pasted_table(text, default_meta):
                 out[target] = df[g]
                 break
 
-    # If no horse column found and first column exists, treat first column as horse.
     if out["horse"].astype(str).str.strip().eq("").all() and len(df.columns) > 0:
         out["horse"] = df.iloc[:, 0]
 
@@ -56,8 +52,7 @@ def parse_pasted_table(text, default_meta):
         if key in out.columns:
             out[key] = value
 
-    numeric_default_cols = ["course_winner", "distance_winner", "cd_winner", "non_runner"]
-    for c in numeric_default_cols:
+    for c in ["course_winner", "distance_winner", "cd_winner", "non_runner"]:
         out[c] = out[c].replace("", 0).fillna(0)
 
     out["source"] = out["source"].replace("", "pasted_table")

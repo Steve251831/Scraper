@@ -108,5 +108,4 @@ def score_runners(df, weights=None):
     data["risk_rating"] = np.where(data["confidence_score"] >= 25, "Low", np.where(data["confidence_score"] >= 14, "Medium", "High"))
     data["each_way_score"] = ((data["model_place_probability"] * 100) + (data["value_score"].clip(lower=0) * 100)).round(2)
     data["bet_flag"] = np.where(data["value_score"] > 0.02, "Value", np.where(data["confidence_score"] >= 25, "Strong chance", "No Bet / Watch"))
-
     return data.sort_values(["race_id", "model_win_probability"], ascending=[True, False])

@@ -1,13 +1,17 @@
 from datetime import date
-import json
 import pandas as pd
+import numpy as np
 import streamlit as st
 
 from db import connect, init_db
 from scoring import score_runners, DEFAULT_WEIGHTS
-from data_import import import_racecards, import_odds, import_results, import_racecard_dataframe, manual_add_runner
-from analytics import odds_movement, auto_match_results_to_selections, performance_by_bet_type, horse_name_matches, backtest_from_stored_results
-from paste_cleaner import parse_pasted_table, RACECARD_COLUMNS
+from data_import import import_racecards, import_odds, import_results, import_racecard_dataframe, import_odds_dataframe, manual_add_runner
+from analytics import (
+    odds_movement, auto_match_results_to_selections, auto_settle_selections,
+    performance_by_bet_type, horse_name_matches, backtest_from_stored_results,
+    data_quality_report
+)
+from paste_cleaner import parse_pasted_table
 
 st.set_page_config(page_title="UK Horse Racing Predictor", layout="wide")
 init_db()
@@ -15,16 +19,17 @@ init_db()
 if "weights" not in st.session_state:
     st.session_state.weights = DEFAULT_WEIGHTS.copy()
 
-st.title("UK Horse Racing Predictor — Stage 4")
-st.caption("Paste cleaner, manual entry, adjustable scoring, horse-name matching and backtesting.")
+st.title("UK Horse Racing Predictor — Stage 5")
+st.caption("Daily workflow, data quality checks, staking, bankroll and automatic settlement.")
 
 page = st.sidebar.radio(
     "Page",
     [
-        "Dashboard", "Import Data", "Paste Racecard Cleaner", "Manual Entry",
-        "Racecards", "Odds Movement", "Daily Picks", "Scoring Settings",
-        "Horse Matcher", "Results Tracker", "Performance", "Backtest",
-        "Export Database", "CSV Templates"
+        "Daily Setup", "Dashboard", "Import Data", "Racecard Collection Helper",
+        "Paste Racecard Cleaner", "Manual Entry", "Racecards", "Odds Snapshot Builder",
+        "Odds Movement", "Data Quality", "Daily Picks", "Staking & Bankroll",
+        "Scoring Settings", "Horse Matcher", "Results Tracker", "Performance",
+        "Backtest", "Export Database", "CSV Templates"
     ]
 )
 
@@ -97,19 +102,19 @@ def build_reason(row):
         reasons.append("watch only unless price improves")
     return "; ".join(reasons) if reasons else "Selected by current model score."
 
-def save_selection(row, bet_type):
+def save_selection(row, bet_type, stake=1.0):
     with connect() as con:
         con.execute("""
             INSERT INTO selections
             (selection_date, bet_type, meeting, race_time, horse, odds_taken,
              model_win_probability, model_place_probability, implied_probability,
-             value_score, confidence_score, risk_rating, reasoning)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             value_score, confidence_score, risk_rating, reasoning, stake)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             row["race_date"], bet_type, row["course"], row["race_time"], row["horse"],
             row.get("best_odds"), row.get("model_win_probability"), row.get("model_place_probability"),
             row.get("implied_probability"), row.get("value_score"), row.get("confidence_score"),
-            row.get("risk_rating"), build_reason(row)
+            row.get("risk_rating"), build_reason(row), stake
         ))
 
 def database_counts():
@@ -117,7 +122,49 @@ def database_counts():
     tables = ["runners", "races", "odds", "results", "selections"]
     return {t: pd.read_sql_query(f"SELECT COUNT(*) total FROM {t}", con).iloc[0, 0] for t in tables}
 
-if page == "Dashboard":
+def staking_suggestion(bankroll, risk_rating, confidence, method):
+    bankroll = float(bankroll or 0)
+    confidence = float(confidence or 0)
+    if bankroll <= 0:
+        return 0.0
+    if method == "Level Stakes":
+        return 1.0
+    if method == "1% Bank":
+        return round(bankroll * 0.01, 2)
+    if method == "2% Bank":
+        return round(bankroll * 0.02, 2)
+    # Kelly-lite based on confidence bands, capped.
+    base = 0.005
+    if risk_rating == "Low":
+        base = 0.02
+    elif risk_rating == "Medium":
+        base = 0.01
+    if confidence >= 30:
+        base += 0.005
+    return round(min(bankroll * base, bankroll * 0.03), 2)
+
+if page == "Daily Setup":
+    selected_date = st.date_input("Working date", value=date.today()).isoformat()
+    counts = database_counts()
+    quality = data_quality_report(selected_date)
+
+    st.subheader("Daily Checklist")
+    checklist = [
+        ("Racecards loaded", counts["runners"] > 0),
+        ("Odds snapshots loaded", counts["odds"] > 0),
+        ("Data quality checked", True),
+        ("Selections logged", counts["selections"] > 0),
+        ("Results loaded", counts["results"] > 0),
+    ]
+    for item, ok in checklist:
+        st.write(("✅ " if ok else "⬜ ") + item)
+
+    st.subheader("Data Quality Snapshot")
+    st.dataframe(quality, use_container_width=True)
+
+    st.info("Best daily order: racecards → early odds → later odds → quality check → picks → log bets → results → auto-match → auto-settle.")
+
+elif page == "Dashboard":
     st.subheader("Database Summary")
     counts = database_counts()
     c1, c2, c3, c4, c5 = st.columns(5)
@@ -127,39 +174,21 @@ if page == "Dashboard":
     c4.metric("Results", int(counts["results"]))
     c5.metric("Selections", int(counts["selections"]))
 
-    st.markdown("""
-    ### Stage 4 workflow
-
-    1. Use **Paste Racecard Cleaner** or **Manual Entry** to add real race data.
-    2. Import odds snapshots.
-    3. Check **Odds Movement**.
-    4. Adjust **Scoring Settings**.
-    5. Review **Daily Picks**.
-    6. Log selections.
-    7. Import results.
-    8. Auto-match results.
-    9. Use **Backtest** to check strategy performance.
-    """)
-
 elif page == "Import Data":
     st.subheader("Import Data")
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         if st.button("Load sample racecards"):
-            import_racecards("sample_data/racecards_sample.csv")
-            st.success("Sample racecards loaded.")
+            st.success(f"Sample racecards loaded: {import_racecards('sample_data/racecards_sample.csv')} rows.")
     with c2:
         if st.button("Load sample early odds"):
-            import_odds("sample_data/odds_sample_early.csv")
-            st.success("Sample early odds loaded.")
+            st.success(f"Sample early odds loaded: {import_odds('sample_data/odds_sample_early.csv')} rows.")
     with c3:
         if st.button("Load sample later odds"):
-            import_odds("sample_data/odds_sample_later.csv")
-            st.success("Sample later odds loaded.")
+            st.success(f"Sample later odds loaded: {import_odds('sample_data/odds_sample_later.csv')} rows.")
     with c4:
         if st.button("Load sample results"):
-            import_results("sample_data/results_sample.csv")
-            st.success("Sample results loaded.")
+            st.success(f"Sample results loaded: {import_results('sample_data/results_sample.csv')} rows.")
 
     st.divider()
     racecard_file = st.file_uploader("Upload racecards CSV", type=["csv"], key="racecard")
@@ -168,8 +197,7 @@ elif page == "Import Data":
         st.dataframe(tmp.head(), use_container_width=True)
         if st.button("Import uploaded racecards"):
             tmp.to_csv("_uploaded_racecards.csv", index=False)
-            rows = import_racecards("_uploaded_racecards.csv")
-            st.success(f"Racecards imported: {rows} rows.")
+            st.success(f"Racecards imported: {import_racecards('_uploaded_racecards.csv')} rows.")
 
     odds_file = st.file_uploader("Upload odds CSV", type=["csv"], key="odds")
     if odds_file:
@@ -177,8 +205,7 @@ elif page == "Import Data":
         st.dataframe(tmp.head(), use_container_width=True)
         if st.button("Import uploaded odds"):
             tmp.to_csv("_uploaded_odds.csv", index=False)
-            rows = import_odds("_uploaded_odds.csv")
-            st.success(f"Odds imported: {rows} rows.")
+            st.success(f"Odds imported: {import_odds('_uploaded_odds.csv')} rows.")
 
     results_file = st.file_uploader("Upload results CSV", type=["csv"], key="results")
     if results_file:
@@ -186,13 +213,48 @@ elif page == "Import Data":
         st.dataframe(tmp.head(), use_container_width=True)
         if st.button("Import uploaded results"):
             tmp.to_csv("_uploaded_results.csv", index=False)
-            rows = import_results("_uploaded_results.csv")
-            st.success(f"Results imported: {rows} rows.")
+            st.success(f"Results imported: {import_results('_uploaded_results.csv')} rows.")
+
+elif page == "Racecard Collection Helper":
+    st.subheader("Racecard Collection Helper")
+    st.write("Use this as a semi-automatic daily workflow when copying data from free public racecard pages.")
+    st.markdown("""
+    ### What to collect for each race
+
+    Minimum:
+    - Race date
+    - Course
+    - Race time
+    - Horse name
+
+    Better:
+    - Trainer
+    - Jockey
+    - Draw/stall
+    - Age
+    - Weight
+    - Official rating
+    - Recent form
+    - Course winner / distance winner / CD winner
+    - Going
+    - Race distance
+    - Number of runners
+    """)
+    st.markdown("""
+    ### Fast route
+
+    1. Copy the runner table from the racecard page.
+    2. Go to **Paste Racecard Cleaner**.
+    3. Fill the race details at the top.
+    4. Paste the table.
+    5. Clean it.
+    6. Review and edit columns.
+    7. Import it.
+    """)
+    st.warning("Do not overload public sites with automated scraping. For daily use, copy/paste or licensed APIs are safer.")
 
 elif page == "Paste Racecard Cleaner":
     st.subheader("Paste Racecard Cleaner")
-    st.write("Paste a copied table. The app will try to convert it into the racecard import format.")
-
     c1, c2, c3 = st.columns(3)
     with c1:
         race_date = st.date_input("Race date", value=date.today()).isoformat()
@@ -206,33 +268,22 @@ elif page == "Paste Racecard Cleaner":
         race_type = st.text_input("Race type", "Flat")
         distance = st.text_input("Distance", "")
         race_class = st.text_input("Class", "")
+        runners_count = st.number_input("Runners count", min_value=0, step=1)
 
-    pasted = st.text_area("Paste racecard table here", height=240, placeholder="Paste columns like Horse, Trainer, Jockey, Draw, Age, Weight, OR, Form...")
-
+    pasted = st.text_area("Paste racecard table here", height=240)
     default_meta = {
-        "race_date": race_date,
-        "course": course,
-        "country": country,
-        "going": going,
-        "race_time": race_time,
-        "race_name": race_name,
-        "race_type": race_type,
-        "distance": distance,
-        "class": race_class,
+        "race_date": race_date, "course": course, "country": country, "going": going,
+        "race_time": race_time, "race_name": race_name, "race_type": race_type,
+        "distance": distance, "class": race_class, "runners_count": runners_count,
         "source": "pasted_table",
     }
-
     if st.button("Clean pasted table"):
-        cleaned = parse_pasted_table(pasted, default_meta)
-        st.session_state.cleaned_racecard = cleaned
-
+        st.session_state.cleaned_racecard = parse_pasted_table(pasted, default_meta)
     if "cleaned_racecard" in st.session_state:
-        cleaned = st.session_state.cleaned_racecard
-        edited = st.data_editor(cleaned, use_container_width=True, num_rows="dynamic")
+        edited = st.data_editor(st.session_state.cleaned_racecard, use_container_width=True, num_rows="dynamic")
         st.download_button("Download cleaned racecard CSV", edited.to_csv(index=False), file_name="cleaned_racecard.csv", mime="text/csv")
         if st.button("Import cleaned racecard"):
-            rows = import_racecard_dataframe(edited)
-            st.success(f"Imported {rows} runner rows.")
+            st.success(f"Imported {import_racecard_dataframe(edited)} runner rows.")
 
 elif page == "Manual Entry":
     st.subheader("Manual Runner Entry")
@@ -253,21 +304,13 @@ elif page == "Manual Entry":
             age = st.number_input("Age", min_value=0, step=1)
             official_rating = st.number_input("Official rating", min_value=0.0, step=1.0)
             form = st.text_input("Form")
-
-        c4, c5, c6 = st.columns(3)
-        with c4:
-            distance = st.text_input("Distance")
-            runners_count = st.number_input("Runners count", min_value=0, step=1)
-            weight = st.text_input("Weight")
-        with c5:
-            course_winner = st.checkbox("Course winner")
-            distance_winner = st.checkbox("Distance winner")
-            cd_winner = st.checkbox("CD winner")
-        with c6:
-            days_since_run = st.number_input("Days since run", min_value=0, step=1)
-            headgear = st.text_input("Headgear")
-            non_runner = st.checkbox("Non-runner")
-
+        distance = st.text_input("Distance")
+        runners_count = st.number_input("Runners count", min_value=0, step=1)
+        weight = st.text_input("Weight")
+        course_winner = st.checkbox("Course winner")
+        distance_winner = st.checkbox("Distance winner")
+        cd_winner = st.checkbox("CD winner")
+        days_since_run = st.number_input("Days since run", min_value=0, step=1)
         submitted = st.form_submit_button("Add runner")
         if submitted:
             row = {
@@ -278,10 +321,9 @@ elif page == "Manual Entry":
                 "weight": weight, "official_rating": official_rating, "form": form,
                 "course_winner": int(course_winner), "distance_winner": int(distance_winner),
                 "cd_winner": int(cd_winner), "days_since_run": days_since_run,
-                "headgear": headgear, "non_runner": int(non_runner), "source": "manual_entry"
+                "headgear": "", "non_runner": 0, "source": "manual_entry"
             }
-            rows = manual_add_runner(row)
-            st.success(f"Added {rows} runner row.")
+            st.success(f"Added {manual_add_runner(row)} runner row.")
 
 elif page == "Racecards":
     selected_date = st.date_input("Race date", value=date.today()).isoformat()
@@ -290,6 +332,27 @@ elif page == "Racecards":
         st.warning("No racecards loaded for this date.")
     else:
         st.dataframe(score_runners(df, st.session_state.weights), use_container_width=True)
+
+elif page == "Odds Snapshot Builder":
+    st.subheader("Odds Snapshot Builder")
+    st.write("Create an odds snapshot manually and import it straight into the database.")
+    selected_date = st.date_input("Odds date", value=date.today()).isoformat()
+    runners = load_runners(selected_date)
+    if runners.empty:
+        st.warning("Load racecards first.")
+    else:
+        base = runners[["race_date", "course", "race_time", "horse"]].drop_duplicates().copy()
+        base["bookmaker"] = "Manual"
+        base["decimal_odds"] = np.nan
+        base["exchange_back"] = np.nan
+        base["exchange_lay"] = np.nan
+        base["traded_volume"] = np.nan
+        base["odds_time"] = ""
+        base["source"] = "manual_snapshot"
+        edited = st.data_editor(base, use_container_width=True, num_rows="fixed")
+        st.download_button("Download odds snapshot CSV", edited.to_csv(index=False), file_name="odds_snapshot.csv", mime="text/csv")
+        if st.button("Import odds snapshot"):
+            st.success(f"Imported {import_odds_dataframe(edited)} odds rows.")
 
 elif page == "Odds Movement":
     selected_date = st.date_input("Odds date", value=date.today()).isoformat()
@@ -303,17 +366,22 @@ elif page == "Odds Movement":
         c3.metric("Odds snapshots", int(movement["snapshots"].sum()))
         st.dataframe(movement, use_container_width=True)
 
+elif page == "Data Quality":
+    selected_date = st.date_input("Quality check date", value=date.today()).isoformat()
+    report = data_quality_report(selected_date)
+    st.dataframe(report, use_container_width=True)
+
 elif page == "Daily Picks":
     selected_date = st.date_input("Selection date", value=date.today()).isoformat()
+    default_stake = st.number_input("Stake per logged selection", min_value=0.0, value=1.0, step=1.0)
     df = load_runners(selected_date)
     if df.empty:
         st.warning("No racecards loaded for this date.")
     else:
         scored = score_runners(df, st.session_state.weights)
         scored = scored[scored["non_runner"].fillna(0).astype(int) == 0]
-
-        st.subheader("Top Runner Per Race")
         top_per_race = scored.sort_values("model_win_probability", ascending=False).groupby("race_id").head(1)
+        st.subheader("Top Runner Per Race")
         show_cols = [c for c in ["race_date","course","race_time","race_name","horse","trainer","jockey","opening_odds","latest_odds","odds_change_pct","movement_flag","best_odds","implied_probability","model_win_probability","model_place_probability","value_score","confidence_score","risk_rating","bet_flag"] if c in top_per_race.columns]
         st.dataframe(top_per_race[show_cols], use_container_width=True)
 
@@ -329,28 +397,28 @@ elif page == "Daily Picks":
             st.write(f"**{nap['horse']}** — {nap['course']} {nap['race_time']}")
             st.write(build_reason(nap))
             if st.button("Log NAP"):
-                save_selection(nap, "NAP")
+                save_selection(nap, "NAP", default_stake)
                 st.success("NAP logged.")
         with c2:
             st.subheader("Each-Way NAP")
             st.write(f"**{ew_nap['horse']}** — {ew_nap['course']} {ew_nap['race_time']}")
             st.write(build_reason(ew_nap))
             if st.button("Log Each-Way NAP"):
-                save_selection(ew_nap, "Each-Way NAP")
+                save_selection(ew_nap, "Each-Way NAP", default_stake)
                 st.success("Each-Way NAP logged.")
 
         st.subheader("Win Yankee")
         st.dataframe(yankee[[c for c in ["course","race_time","horse","best_odds","model_win_probability","movement_flag","risk_rating","bet_flag"] if c in yankee.columns]], use_container_width=True)
         if st.button("Log Win Yankee"):
             for _, row in yankee.iterrows():
-                save_selection(row, "Win Yankee")
+                save_selection(row, "Win Yankee", default_stake)
             st.success("Win Yankee logged.")
 
         st.subheader("Each-Way Yankee")
         st.dataframe(ew_yankee[[c for c in ["course","race_time","horse","best_odds","model_place_probability","each_way_score","movement_flag","risk_rating","bet_flag"] if c in ew_yankee.columns]], use_container_width=True)
         if st.button("Log Each-Way Yankee"):
             for _, row in ew_yankee.iterrows():
-                save_selection(row, "Each-Way Yankee")
+                save_selection(row, "Each-Way Yankee", default_stake)
             st.success("Each-Way Yankee logged.")
 
         st.subheader("Value Singles")
@@ -359,9 +427,22 @@ elif page == "Daily Picks":
         else:
             st.dataframe(value_singles[[c for c in ["course","race_time","horse","best_odds","implied_probability","model_win_probability","value_score","movement_flag","risk_rating"] if c in value_singles.columns]], use_container_width=True)
 
+elif page == "Staking & Bankroll":
+    st.subheader("Staking & Bankroll")
+    bankroll = st.number_input("Current bankroll", min_value=0.0, value=100.0, step=10.0)
+    method = st.selectbox("Staking method", ["Level Stakes", "1% Bank", "2% Bank", "Kelly-lite"])
+    selected_date = st.date_input("Selection date for staking suggestions", value=date.today()).isoformat()
+    df = load_runners(selected_date)
+    if df.empty:
+        st.warning("No racecards loaded.")
+    else:
+        scored = score_runners(df, st.session_state.weights)
+        top = scored.sort_values("model_win_probability", ascending=False).head(20).copy()
+        top["suggested_stake"] = top.apply(lambda r: staking_suggestion(bankroll, r.get("risk_rating"), r.get("confidence_score"), method), axis=1)
+        st.dataframe(top[[c for c in ["course","race_time","horse","best_odds","confidence_score","risk_rating","value_score","suggested_stake"] if c in top.columns]], use_container_width=True)
+
 elif page == "Scoring Settings":
     st.subheader("Scoring Settings")
-    st.write("Adjust the weights used by the scoring model. These settings apply during the current app session.")
     new_weights = {}
     for key, value in st.session_state.weights.items():
         new_weights[key] = st.slider(key.title(), min_value=-10, max_value=40, value=int(value), step=1)
@@ -380,9 +461,17 @@ elif page == "Horse Matcher":
 
 elif page == "Results Tracker":
     st.subheader("Selections Log")
-    if st.button("Auto-match results to selections"):
-        updated = auto_match_results_to_selections()
-        st.success(f"Updated {updated} selection result rows.")
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Auto-match results to selections"):
+            updated = auto_match_results_to_selections()
+            st.success(f"Updated {updated} selection result rows.")
+    with c2:
+        ew_fraction = st.selectbox("Each-way place fraction", [0.2, 0.25], format_func=lambda x: "1/5" if x == 0.2 else "1/4")
+        if st.button("Auto-settle returns / P&L"):
+            updated = auto_settle_selections(ew_fraction)
+            st.success(f"Settled {updated} selection rows.")
+
     df = pd.read_sql_query("SELECT * FROM selections ORDER BY created_at DESC", connect())
     if df.empty:
         st.warning("No selections logged yet.")
