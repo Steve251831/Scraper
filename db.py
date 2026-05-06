@@ -48,6 +48,36 @@ CREATE TABLE IF NOT EXISTS runners (
     UNIQUE(race_id, horse)
 );
 
+CREATE TABLE IF NOT EXISTS odds (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    race_date TEXT NOT NULL,
+    course TEXT NOT NULL,
+    race_time TEXT NOT NULL,
+    horse TEXT NOT NULL,
+    bookmaker TEXT,
+    decimal_odds REAL,
+    exchange_back REAL,
+    exchange_lay REAL,
+    traded_volume REAL,
+    odds_time TEXT,
+    source TEXT,
+    imported_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    race_date TEXT NOT NULL,
+    course TEXT NOT NULL,
+    race_time TEXT NOT NULL,
+    horse TEXT NOT NULL,
+    finishing_position TEXT,
+    sp REAL,
+    result_status TEXT,
+    source TEXT,
+    imported_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(race_date, course, race_time, horse)
+);
+
 CREATE TABLE IF NOT EXISTS selections (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     selection_date TEXT NOT NULL,
@@ -58,6 +88,7 @@ CREATE TABLE IF NOT EXISTS selections (
     odds_taken REAL,
     model_win_probability REAL,
     model_place_probability REAL,
+    implied_probability REAL,
     value_score REAL,
     confidence_score REAL,
     risk_rating TEXT,
