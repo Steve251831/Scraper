@@ -1,0 +1,79 @@
+import sqlite3
+from pathlib import Path
+
+DB_PATH = Path("racing.db")
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS meetings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    race_date TEXT NOT NULL,
+    course TEXT NOT NULL,
+    country TEXT,
+    going TEXT,
+    source TEXT,
+    UNIQUE(race_date, course)
+);
+
+CREATE TABLE IF NOT EXISTS races (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    meeting_id INTEGER NOT NULL,
+    race_time TEXT NOT NULL,
+    race_name TEXT,
+    race_type TEXT,
+    distance TEXT,
+    class TEXT,
+    runners_count INTEGER,
+    ew_terms TEXT,
+    UNIQUE(meeting_id, race_time, race_name)
+);
+
+CREATE TABLE IF NOT EXISTS runners (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    race_id INTEGER NOT NULL,
+    horse TEXT NOT NULL,
+    trainer TEXT,
+    jockey TEXT,
+    draw INTEGER,
+    age INTEGER,
+    sex TEXT,
+    weight TEXT,
+    official_rating REAL,
+    form TEXT,
+    course_winner INTEGER DEFAULT 0,
+    distance_winner INTEGER DEFAULT 0,
+    cd_winner INTEGER DEFAULT 0,
+    days_since_run INTEGER,
+    headgear TEXT,
+    non_runner INTEGER DEFAULT 0,
+    UNIQUE(race_id, horse)
+);
+
+CREATE TABLE IF NOT EXISTS selections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    selection_date TEXT NOT NULL,
+    bet_type TEXT NOT NULL,
+    meeting TEXT,
+    race_time TEXT,
+    horse TEXT NOT NULL,
+    odds_taken REAL,
+    model_win_probability REAL,
+    model_place_probability REAL,
+    value_score REAL,
+    confidence_score REAL,
+    risk_rating TEXT,
+    reasoning TEXT,
+    result_position TEXT,
+    result_status TEXT,
+    stake REAL DEFAULT 1,
+    return_amount REAL DEFAULT 0,
+    profit_loss REAL DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
+def connect():
+    return sqlite3.connect(DB_PATH, check_same_thread=False)
+
+def init_db():
+    with connect() as con:
+        con.executescript(SCHEMA)
