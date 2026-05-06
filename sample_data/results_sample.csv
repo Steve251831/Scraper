@@ -1,5 +1,10 @@
 race_date,course,race_time,horse,finishing_position,sp,result_status,source
 2026-05-06,Kempton,18:00,Example Horse A,1,2.5,Won,sample
 2026-05-06,Kempton,18:00,Example Horse B,4,6.0,Lost,sample
+2026-05-06,Kempton,18:00,Example Horse E,3,9.0,Placed,sample
+2026-05-06,Kempton,18:00,Example Horse F,2,4.0,Placed,sample
 2026-05-06,Chester,14:30,Example Horse C,2,3.2,Placed,sample
+2026-05-06,Chester,14:30,Example Horse D,5,8.5,Lost,sample
+2026-05-06,Chester,14:30,Example Horse G,1,6.0,Won,sample
 2026-05-06,Ascot,15:10,Example Horse I,1,2.2,Won,sample
+2026-05-06,Ascot,15:10,Example Horse K,3,5.0,Placed,sample

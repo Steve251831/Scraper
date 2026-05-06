@@ -5,19 +5,35 @@ import streamlit as st
 from db import connect, init_db
 from scoring import score_runners
 from data_import import import_racecards, import_odds, import_results
+from analytics import odds_movement, auto_match_results_to_selections, performance_by_bet_type
 
 st.set_page_config(page_title="UK Horse Racing Predictor", layout="wide")
 init_db()
 
-st.title("UK Horse Racing Predictor — Stage 2")
-st.caption("Import racecards, odds and results. Score NAPs, each-way picks, Yankees and value selections.")
+st.title("UK Horse Racing Predictor — Stage 3")
+st.caption("Odds movement, results auto-matching, performance tracking and database exports.")
 
 page = st.sidebar.radio(
     "Page",
-    ["Dashboard", "Import Data", "Racecards", "Daily Picks", "Results Tracker", "Profit/Loss", "CSV Templates"]
+    [
+        "Dashboard", "Import Data", "Racecards", "Odds Movement", "Daily Picks",
+        "Results Tracker", "Performance", "Export Database", "CSV Templates"
+    ]
 )
 
 def load_runners(selected_date=None):
+    movement = odds_movement(selected_date)
+    if not movement.empty:
+        movement_cols = movement[[
+            "race_date", "course", "race_time", "horse", "opening_odds", "latest_odds",
+            "odds_change_pct", "movement_flag", "latest_volume"
+        ]]
+    else:
+        movement_cols = pd.DataFrame(columns=[
+            "race_date", "course", "race_time", "horse", "opening_odds", "latest_odds",
+            "odds_change_pct", "movement_flag", "latest_volume"
+        ])
+
     sql = """
     WITH latest_odds AS (
         SELECT o.*
@@ -50,7 +66,12 @@ def load_runners(selected_date=None):
         AND lo.horse = ru.horse
     WHERE (? IS NULL OR m.race_date = ?)
     """
-    return pd.read_sql_query(sql, connect(), params=(selected_date, selected_date))
+    df = pd.read_sql_query(sql, connect(), params=(selected_date, selected_date))
+    if df.empty:
+        return df
+
+    df = df.merge(movement_cols, on=["race_date", "course", "race_time", "horse"], how="left")
+    return df
 
 def build_reason(row):
     reasons = []
@@ -64,6 +85,10 @@ def build_reason(row):
         reasons.append(f"official rating {row.get('official_rating')}")
     if row.get("form"):
         reasons.append(f"recent form {row.get('form')}")
+    if row.get("movement_flag") == "Steamer":
+        reasons.append("market steamer")
+    if row.get("movement_flag") == "Drifter":
+        reasons.append("market drifter")
     if pd.notna(row.get("best_odds")):
         reasons.append(f"available odds {row.get('best_odds')}")
     if pd.notna(row.get("value_score")) and row.get("value_score") > 0:
@@ -89,18 +114,12 @@ def save_selection(row, bet_type):
 
 def database_counts():
     con = connect()
-    return {
-        "runners": pd.read_sql_query("SELECT COUNT(*) total FROM runners", con).iloc[0, 0],
-        "races": pd.read_sql_query("SELECT COUNT(*) total FROM races", con).iloc[0, 0],
-        "odds": pd.read_sql_query("SELECT COUNT(*) total FROM odds", con).iloc[0, 0],
-        "results": pd.read_sql_query("SELECT COUNT(*) total FROM results", con).iloc[0, 0],
-        "selections": pd.read_sql_query("SELECT COUNT(*) total FROM selections", con).iloc[0, 0],
-    }
+    tables = ["runners", "races", "odds", "results", "selections"]
+    return {t: pd.read_sql_query(f"SELECT COUNT(*) total FROM {t}", con).iloc[0, 0] for t in tables}
 
 if page == "Dashboard":
     st.subheader("Database Summary")
     counts = database_counts()
-
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Runners", int(counts["runners"]))
     c2.metric("Races", int(counts["races"]))
@@ -109,30 +128,37 @@ if page == "Dashboard":
     c5.metric("Selections", int(counts["selections"]))
 
     st.markdown("""
-    ### Stage 2 workflow
+    ### Stage 3 workflow
 
     1. Import racecards.
-    2. Import odds if you have them.
-    3. Check **Daily Picks**.
-    4. Log selections.
-    5. Import results.
-    6. Update profit/loss in **Results Tracker**.
+    2. Import early odds.
+    3. Import later odds.
+    4. Check **Odds Movement**.
+    5. Check **Daily Picks**.
+    6. Log selections.
+    7. Import results.
+    8. Auto-match results to selections.
+    9. Review **Performance**.
     """)
 
 elif page == "Import Data":
     st.subheader("Import Data")
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     with c1:
-        if st.button("Load sample racecard data"):
+        if st.button("Load sample racecards"):
             import_racecards("sample_data/racecards_sample.csv")
             st.success("Sample racecards loaded.")
     with c2:
-        if st.button("Load sample odds data"):
-            import_odds("sample_data/odds_sample.csv")
-            st.success("Sample odds loaded.")
+        if st.button("Load sample early odds"):
+            import_odds("sample_data/odds_sample_early.csv")
+            st.success("Sample early odds loaded.")
     with c3:
-        if st.button("Load sample results data"):
+        if st.button("Load sample later odds"):
+            import_odds("sample_data/odds_sample_later.csv")
+            st.success("Sample later odds loaded.")
+    with c4:
+        if st.button("Load sample results"):
             import_results("sample_data/results_sample.csv")
             st.success("Sample results loaded.")
 
@@ -171,8 +197,20 @@ elif page == "Racecards":
     if df.empty:
         st.warning("No racecards loaded for this date.")
     else:
-        scored = score_runners(df)
-        st.dataframe(scored, use_container_width=True)
+        st.dataframe(score_runners(df), use_container_width=True)
+
+elif page == "Odds Movement":
+    selected_date = st.date_input("Odds date", value=date.today()).isoformat()
+    movement = odds_movement(selected_date)
+    if movement.empty:
+        st.warning("No odds snapshots loaded for this date.")
+    else:
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Steamers", int((movement["movement_flag"] == "Steamer").sum()))
+        c2.metric("Drifters", int((movement["movement_flag"] == "Drifter").sum()))
+        c3.metric("Odds snapshots", int(movement["snapshots"].sum()))
+
+        st.dataframe(movement, use_container_width=True)
 
 elif page == "Daily Picks":
     selected_date = st.date_input("Selection date", value=date.today()).isoformat()
@@ -189,6 +227,7 @@ elif page == "Daily Picks":
         st.dataframe(
             top_per_race[[
                 "race_date", "course", "race_time", "race_name", "horse", "trainer", "jockey",
+                "opening_odds", "latest_odds", "odds_change_pct", "movement_flag",
                 "best_odds", "implied_probability", "model_win_probability", "model_place_probability",
                 "value_score", "confidence_score", "risk_rating", "bet_flag"
             ]],
@@ -219,14 +258,14 @@ elif page == "Daily Picks":
                 st.success("Each-Way NAP logged.")
 
         st.subheader("Win Yankee")
-        st.dataframe(yankee[["course", "race_time", "horse", "best_odds", "model_win_probability", "risk_rating", "bet_flag"]], use_container_width=True)
+        st.dataframe(yankee[["course", "race_time", "horse", "best_odds", "model_win_probability", "movement_flag", "risk_rating", "bet_flag"]], use_container_width=True)
         if st.button("Log Win Yankee"):
             for _, row in yankee.iterrows():
                 save_selection(row, "Win Yankee")
             st.success("Win Yankee logged.")
 
         st.subheader("Each-Way Yankee")
-        st.dataframe(ew_yankee[["course", "race_time", "horse", "best_odds", "model_place_probability", "each_way_score", "risk_rating", "bet_flag"]], use_container_width=True)
+        st.dataframe(ew_yankee[["course", "race_time", "horse", "best_odds", "model_place_probability", "each_way_score", "movement_flag", "risk_rating", "bet_flag"]], use_container_width=True)
         if st.button("Log Each-Way Yankee"):
             for _, row in ew_yankee.iterrows():
                 save_selection(row, "Each-Way Yankee")
@@ -236,10 +275,15 @@ elif page == "Daily Picks":
         if value_singles.empty:
             st.info("No clear value singles found using current odds/model.")
         else:
-            st.dataframe(value_singles[["course", "race_time", "horse", "best_odds", "implied_probability", "model_win_probability", "value_score", "risk_rating"]], use_container_width=True)
+            st.dataframe(value_singles[["course", "race_time", "horse", "best_odds", "implied_probability", "model_win_probability", "value_score", "movement_flag", "risk_rating"]], use_container_width=True)
 
 elif page == "Results Tracker":
     st.subheader("Selections Log")
+
+    if st.button("Auto-match results to selections"):
+        updated = auto_match_results_to_selections()
+        st.success(f"Updated {updated} selection result rows.")
+
     df = pd.read_sql_query("SELECT * FROM selections ORDER BY created_at DESC", connect())
 
     if df.empty:
@@ -252,33 +296,44 @@ elif page == "Results Tracker":
                 edited.to_sql("selections", con, if_exists="append", index=False)
             st.success("Saved.")
 
-elif page == "Profit/Loss":
-    df = pd.read_sql_query("SELECT * FROM selections ORDER BY created_at", connect())
-
-    if df.empty:
+elif page == "Performance":
+    st.subheader("Performance by Bet Type")
+    perf = performance_by_bet_type()
+    if perf.empty:
         st.warning("No selections logged yet.")
     else:
-        df["profit_loss"] = pd.to_numeric(df["profit_loss"], errors="coerce").fillna(0)
-        df["stake"] = pd.to_numeric(df["stake"], errors="coerce").fillna(0)
-        df["running_pl"] = df["profit_loss"].cumsum()
+        st.dataframe(perf, use_container_width=True)
 
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Total P/L", f"£{df['profit_loss'].sum():.2f}")
-        c2.metric("Total Stake", f"£{df['stake'].sum():.2f}")
-        c3.metric("ROI", f"{(df['profit_loss'].sum() / max(df['stake'].sum(), 1) * 100):.2f}%")
-
-        st.line_chart(df.set_index("created_at")["running_pl"])
+    st.subheader("Selection History")
+    df = pd.read_sql_query("SELECT * FROM selections ORDER BY created_at DESC", connect())
+    if not df.empty:
         st.dataframe(df, use_container_width=True)
+
+elif page == "Export Database":
+    st.subheader("Export Database Tables")
+    con = connect()
+    for table in ["meetings", "races", "runners", "odds", "results", "selections"]:
+        df = pd.read_sql_query(f"SELECT * FROM {table}", con)
+        st.markdown(f"### {table}")
+        st.write(f"{len(df)} rows")
+        st.download_button(
+            label=f"Download {table}.csv",
+            data=df.to_csv(index=False),
+            file_name=f"{table}.csv",
+            mime="text/csv"
+        )
+        with st.expander(f"Preview {table}"):
+            st.dataframe(df.head(20), use_container_width=True)
 
 elif page == "CSV Templates":
     st.subheader("CSV Templates")
-    st.write("Use these headings when building real racecard, odds and results files.")
-
-    st.markdown("### Racecard template")
-    st.code(open("templates/racecard_template.csv", "r", encoding="utf-8").read())
-
-    st.markdown("### Odds template")
-    st.code(open("templates/odds_template.csv", "r", encoding="utf-8").read())
-
-    st.markdown("### Results template")
-    st.code(open("templates/results_template.csv", "r", encoding="utf-8").read())
+    for name in ["racecard_template.csv", "odds_template.csv", "results_template.csv"]:
+        st.markdown(f"### {name}")
+        content = open(f"templates/{name}", "r", encoding="utf-8").read()
+        st.code(content)
+        st.download_button(
+            label=f"Download {name}",
+            data=content,
+            file_name=name,
+            mime="text/csv"
+        )

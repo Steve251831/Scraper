@@ -1,22 +1,17 @@
-# UK Horse Racing Predictor - Stage 2
+# UK Horse Racing Predictor - Stage 3
 
-This is the next working Streamlit version.
-
-## New in Stage 2
+Streamlit-safe version with:
 
 - Racecard CSV import
 - Odds CSV import
+- Multiple odds snapshots
+- Steamer/drifter detection
 - Results CSV import
-- Improved daily selections
-- NAP of the day
-- Each-way NAP
-- Win Yankee
-- Each-way Yankee
-- Value selections
-- No Bet flags
-- Results tracker
-- Profit/loss dashboard
-- CSV templates included
+- Auto-match results to logged selections
+- Bet-type performance stats
+- Database export page
+- NAP, each-way NAP, Win Yankee, Each-Way Yankee
+- Value singles and No Bet / Watch flags
 
 ## Streamlit Cloud
 
@@ -26,34 +21,26 @@ Main file path:
 app.py
 ```
 
-## Install
-
-```bash
-pip install -r requirements.txt
-streamlit run app.py
-```
-
 ## First test
 
-1. Deploy app.
-2. Go to **Import Data**.
-3. Click **Load sample racecard data**.
-4. Click **Load sample odds data**.
-5. Go to **Daily Picks**.
-6. Select **2026-05-06**.
+1. Upload to GitHub.
+2. Reboot Streamlit app.
+3. Go to **Import Data**.
+4. Load sample racecards.
+5. Load sample early odds.
+6. Load sample later odds.
+7. Go to **Odds Movement**.
+8. Go to **Daily Picks** and select `2026-05-06`.
+9. Log a selection.
+10. Load sample results.
+11. Click **Auto-match results to selections** on Results Tracker.
 
-## Import templates
+## Dependencies
 
-Use the files inside:
+Only:
 
 ```text
-templates/
+streamlit
+pandas
+numpy
 ```
-
-- `racecard_template.csv`
-- `odds_template.csv`
-- `results_template.csv`
-
-## Important
-
-This app does not invent missing horse racing data. If odds or results are missing, it leaves them blank.

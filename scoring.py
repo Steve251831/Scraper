@@ -5,11 +5,9 @@ import numpy as np
 def parse_form_score(form):
     if not isinstance(form, str) or not form.strip():
         return 0.0
-
     chars = re.findall(r"[0-9PUFROBD]", form.upper())[-6:]
     if not chars:
         return 0.0
-
     score = 0
     for c in chars:
         if c == "1":
@@ -22,9 +20,6 @@ def parse_form_score(form):
             score += 4
         elif c.isdigit():
             score += max(1, 6 - int(c))
-        else:
-            score += 0
-
     return round(score / len(chars), 2)
 
 def normalise(series):
@@ -55,19 +50,19 @@ def score_runners(df, weights=None):
         "freshness": 10,
         "draw": 5,
         "market": 10,
-        "value": 10,
     }
 
     data = df.copy()
 
     for col in [
         "official_rating", "course_winner", "distance_winner", "cd_winner",
-        "days_since_run", "draw", "decimal_odds", "exchange_back", "traded_volume"
+        "days_since_run", "draw", "decimal_odds", "exchange_back",
+        "opening_odds", "latest_odds", "odds_change_pct", "traded_volume"
     ]:
         if col not in data.columns:
             data[col] = np.nan
 
-    data["best_odds"] = data["exchange_back"].fillna(data["decimal_odds"])
+    data["best_odds"] = data["exchange_back"].fillna(data["decimal_odds"]).fillna(data["latest_odds"])
     data["implied_probability"] = data["best_odds"].apply(implied_probability)
 
     data["form_score"] = data["form"].apply(parse_form_score) / 10
@@ -84,10 +79,13 @@ def score_runners(df, weights=None):
     runners = pd.to_numeric(data["runners_count"], errors="coerce")
     data["draw_score"] = np.where(draw.notna() & runners.notna(), 1 - ((draw - 1) / runners).clip(0, 1), 0.5)
 
-    # Market score: shorter prices generally imply higher chance, but only one part of model.
     data["market_score"] = data["implied_probability"].fillna(0)
     if data["market_score"].max() > 0:
         data["market_score"] = normalise(data["market_score"])
+
+    # Steamers get a small confidence lift, drifters get a small penalty.
+    change = pd.to_numeric(data["odds_change_pct"], errors="coerce").fillna(0)
+    data["movement_adjustment"] = np.where(change <= -10, 3, np.where(change >= 15, -3, 0))
 
     data["raw_score"] = (
         data["form_score"] * weights["form"] +
@@ -97,7 +95,8 @@ def score_runners(df, weights=None):
         data["distance_score"] * weights["distance"] +
         data["freshness_score"] * weights["freshness"] +
         data["draw_score"] * weights["draw"] +
-        data["market_score"] * weights["market"]
+        data["market_score"] * weights["market"] +
+        data["movement_adjustment"]
     )
 
     data["score_positive"] = data["raw_score"].clip(lower=0.01)

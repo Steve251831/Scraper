@@ -31,7 +31,6 @@ def import_racecards(path):
     with connect() as con:
         for _, r in df.iterrows():
             row = clean_row(r.to_dict())
-
             con.execute("""
                 INSERT OR IGNORE INTO meetings (race_date, course, country, going, source)
                 VALUES (?, ?, ?, ?, ?)
@@ -43,20 +42,14 @@ def import_racecards(path):
             ).fetchone()[0]
 
             race_name = row.get("race_name") or ""
-
             con.execute("""
                 INSERT OR IGNORE INTO races
                 (meeting_id, race_time, race_name, race_type, distance, class, runners_count, ew_terms)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                meeting_id,
-                str(row["race_time"]),
-                race_name,
-                row.get("race_type"),
-                row.get("distance"),
-                row.get("class"),
-                safe_int(row.get("runners_count")),
-                row.get("ew_terms"),
+                meeting_id, str(row["race_time"]), race_name, row.get("race_type"),
+                row.get("distance"), row.get("class"), safe_int(row.get("runners_count")),
+                row.get("ew_terms")
             ))
 
             race_id = con.execute("""
@@ -69,22 +62,14 @@ def import_racecards(path):
                  course_winner, distance_winner, cd_winner, days_since_run, headgear, non_runner)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                race_id,
-                row.get("horse"),
-                row.get("trainer"),
-                row.get("jockey"),
-                safe_int(row.get("draw")),
-                safe_int(row.get("age")),
-                row.get("sex"),
-                row.get("weight"),
-                safe_float(row.get("official_rating")),
-                row.get("form"),
+                race_id, row.get("horse"), row.get("trainer"), row.get("jockey"),
+                safe_int(row.get("draw")), safe_int(row.get("age")), row.get("sex"), row.get("weight"),
+                safe_float(row.get("official_rating")), row.get("form"),
                 safe_int(row.get("course_winner")) or 0,
                 safe_int(row.get("distance_winner")) or 0,
                 safe_int(row.get("cd_winner")) or 0,
-                safe_int(row.get("days_since_run")),
-                row.get("headgear"),
-                safe_int(row.get("non_runner")) or 0,
+                safe_int(row.get("days_since_run")), row.get("headgear"),
+                safe_int(row.get("non_runner")) or 0
             ))
 
 def import_odds(path):
@@ -104,17 +89,10 @@ def import_odds(path):
                  exchange_back, exchange_lay, traded_volume, odds_time, source)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                str(row["race_date"]),
-                str(row["course"]),
-                str(row["race_time"]),
-                str(row["horse"]),
-                row.get("bookmaker"),
-                safe_float(row.get("decimal_odds")),
-                safe_float(row.get("exchange_back")),
-                safe_float(row.get("exchange_lay")),
-                safe_float(row.get("traded_volume")),
-                row.get("odds_time"),
-                row.get("source"),
+                str(row["race_date"]), str(row["course"]), str(row["race_time"]),
+                str(row["horse"]), row.get("bookmaker"), safe_float(row.get("decimal_odds")),
+                safe_float(row.get("exchange_back")), safe_float(row.get("exchange_lay")),
+                safe_float(row.get("traded_volume")), row.get("odds_time"), row.get("source")
             ))
 
 def import_results(path):
@@ -133,12 +111,7 @@ def import_results(path):
                 (race_date, course, race_time, horse, finishing_position, sp, result_status, source)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                str(row["race_date"]),
-                str(row["course"]),
-                str(row["race_time"]),
-                str(row["horse"]),
-                str(row["finishing_position"]),
-                safe_float(row.get("sp")),
-                row.get("result_status"),
-                row.get("source"),
+                str(row["race_date"]), str(row["course"]), str(row["race_time"]),
+                str(row["horse"]), str(row["finishing_position"]), safe_float(row.get("sp")),
+                row.get("result_status"), row.get("source")
             ))
