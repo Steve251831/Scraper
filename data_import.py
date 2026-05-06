@@ -97,36 +97,3 @@ def import_odds_dataframe(df):
             ))
             rows += 1
     return rows
-
-def import_results_dataframe(df):
-    init_db()
-    required = {"race_date", "course", "race_time", "horse", "finishing_position"}
-    missing = required - set(df.columns)
-    if missing:
-        raise ValueError(f"Missing results columns: {missing}")
-
-    rows = 0
-    with connect() as con:
-        for _, r in df.iterrows():
-            row = clean_row(r.to_dict())
-            con.execute("""
-                INSERT OR REPLACE INTO results
-                (race_date, course, race_time, horse, finishing_position, sp, result_status, source)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                str(row["race_date"]), str(row["course"]), str(row["race_time"]), str(row["horse"]),
-                str(row["finishing_position"]), safe_float(row.get("sp")),
-                row.get("result_status"), row.get("source")
-            ))
-            rows += 1
-    return rows
-
-def import_csv(path, source_type):
-    df = pd.read_csv(path)
-    if source_type == "racecard":
-        return import_racecard_dataframe(df)
-    if source_type == "odds":
-        return import_odds_dataframe(df)
-    if source_type == "results":
-        return import_results_dataframe(df)
-    raise ValueError("source_type must be racecard, odds, or results")

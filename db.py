@@ -100,15 +100,6 @@ CREATE TABLE IF NOT EXISTS selections (
     profit_loss REAL DEFAULT 0,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
-
-CREATE TABLE IF NOT EXISTS sources (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    source_type TEXT NOT NULL,
-    source_name TEXT NOT NULL,
-    url_template TEXT NOT NULL,
-    enabled INTEGER DEFAULT 1,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
-);
 """
 
 def connect():
